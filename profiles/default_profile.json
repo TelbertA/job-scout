@@ -1,0 +1,63 @@
+{
+  "name": "Telbert Anthony - DevSecOps / Cloud / Platform",
+  "tier_1": {
+    "devsecops": 4, "ci/cd": 4, "github actions": 4, "pipeline": 4,
+    "sast": 4, "dast": 4, "sca": 4, "secrets detection": 4,
+    "shift left": 4, "security gates": 4, "security automation": 4,
+    "infrastructure as code": 4, "cloudformation": 4, "sam cli": 4,
+    "terraform": 4, "ansible": 4,
+    "docker": 4, "kubernetes": 4, "k8s": 4, "container": 4,
+    "ecs": 4, "eks": 4, "podman": 4,
+    "aws": 4, "lambda": 4, "python": 4, "boto3": 4,
+    "platform engineering": 4, "internal developer platform": 4,
+    "developer experience": 4, "golden path": 4
+  },
+  "tier_2": {
+    "eventbridge": 3, "dynamodb": 3, "s3": 3, "ec2": 3,
+    "cloudwatch": 3, "iam": 3, "athena": 3, "bedrock": 3,
+    "ecr": 3, "ssm": 3, "secrets manager": 3,
+    "crowdstrike": 3, "splunk": 3, "siem": 3, "suricata": 3,
+    "mitre att&ck": 3, "nist 800-53": 3, "zero trust": 3,
+    "nist 800-171": 3, "disa stigs": 3, "rmf": 3,
+    "jenkins": 3, "gitlab ci": 3, "argocd": 3,
+    "helm": 3, "kustomize": 3,
+    "bandit": 3, "trufflehog": 3, "trivy": 3, "checkov": 3,
+    "pip-audit": 3, "cfn-lint": 3, "snyk": 3, "sonarqube": 3,
+    "container scanning": 3, "sbom": 3,
+    "bash": 3, "powershell": 3, "serverless": 3,
+    "automation": 3, "detection engineering": 3
+  },
+  "tier_3": {
+    "sql": 2, "rest api": 2, "json": 2, "yaml": 2,
+    "linux": 2, "git": 2, "incident response": 2,
+    "vulnerability management": 2, "rapid7": 2,
+    "ids": 2, "spl": 2, "wireshark": 2,
+    "monitoring": 2, "observability": 2, "prometheus": 2,
+    "grafana": 2, "datadog": 2, "cloud security": 2,
+    "soc": 2, "compliance": 2, "servicenow": 2,
+    "javascript": 2, "api gateway": 2
+  },
+  "tier_4": {
+    "security+": 1, "cysa+": 1, "solutions architect": 1,
+    "cloud practitioner": 1, "linux essentials": 1,
+    "clearance": 1, "public trust": 1,
+    "agile": 1, "scrum": 1, "jira": 1
+  },
+  "bonus_keywords": {
+    "devsecops engineer": 6, "platform engineer": 6,
+    "devops engineer": 5, "cloud security engineer": 5,
+    "security automation": 5, "infrastructure engineer": 4,
+    "site reliability": 4, "sre": 4,
+    "2-4 years": 3, "3-5 years": 3, "2+ years": 3,
+    "junior": 3, "early career": 3, "associate": 2,
+    "remote": 2
+  },
+  "negative_keywords": [
+    "physical security", "security guard", "loss prevention",
+    "cctv", "armed", "unarmed",
+    "10+ years", "15+ years", "12+ years",
+    "principal engineer", "staff engineer", "director", "vp",
+    "ts/sci required", "ts/sci with poly",
+    "mainframe", "cobol", ".net only", "java only"
+  ]
+}

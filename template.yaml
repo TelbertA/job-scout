@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Job Scout v2 - DevSecOps job discovery pipeline.
+  JSearch API -> Score -> DynamoDB dedup -> S3 reports -> Discord.
+
+# Globals apply to every Lambda function in this template.
+# Avoids repeating Timeout/MemorySize on each function definition.
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 512
+    Tracing: Active
+    Environment:
+      Variables:
+        DYNAMODB_TABLE: !Ref JobScoutTable
+        S3_BUCKET: !Ref ReportsBucket
+
+Resources:
+
+  # -----------------------------------------------------------------------
+  # Lambda Function
+  # PackageType: Image means we deploy a Docker container, not a zip file.
+  # This gives us: consistent builds, Trivy scanning in CI, and the ability
+  # to run the exact same image locally that runs in production.
+  # -----------------------------------------------------------------------
+  JobScoutFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      ImageUri: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/job-scout:latest"
+      FunctionName: job-scout
+      Description: Daily job discovery and scoring pipeline
+      Policies:
+        # SAM policy templates - these expand into least-privilege IAM policies.
+        # Each one is scoped to a specific resource, never a wildcard.
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobScoutTable
+        - S3CrudPolicy:
+            BucketName: !Ref ReportsBucket
+        - SSMParameterReadPolicy:
+            ParameterName: "job-scout/*"
+      Events:
+        DailySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 12 ? * * *)  # Runs at 12:00 UTC = 7AM ET / 8AM EDT
+            Description: Daily job scout trigger
+            Enabled: true
+    Metadata:
+      DockerTag: latest
+      DockerContext: .
+      Dockerfile: Dockerfile
+
+  # -----------------------------------------------------------------------
+  # DynamoDB Table - stores job_ids we've already seen (deduplication)
+  # PAY_PER_REQUEST = no capacity planning, scales to zero when idle
+  # SSE = encrypted at rest (ZTA: Assume Breach)
+  # TTL = items auto-delete after 90 days (data minimization)
+  # PITR = point-in-time recovery, lets you restore to any second in 35 days
+  # -----------------------------------------------------------------------
+  JobScoutTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: job-scout-seen
+      AttributeDefinitions:
+        - AttributeName: job_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: job_id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  # -----------------------------------------------------------------------
+  # S3 Bucket - stores HTML job reports
+  # SSE-S3 = server-side encryption (every object encrypted at rest)
+  # Versioning = keeps old copies if an object is overwritten
+  # PublicAccessBlock = all four settings locked to true (belt and suspenders)
+  # Lifecycle = auto-deletes reports older than 90 days
+  # -----------------------------------------------------------------------
+  ReportsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "job-scout-reports-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldReports
+            Status: Enabled
+            ExpirationInDays: 90
+
+  # -----------------------------------------------------------------------
+  # S3 Bucket Policy - denies any request that doesn't use HTTPS
+  # This is the "Encrypt in Transit" ZTA control.
+  # Even if someone gets the bucket URL, HTTP requests are flat-out rejected.
+  # -----------------------------------------------------------------------
+  ReportsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ReportsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyNonHTTPS
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ReportsBucket.Arn
+              - !Sub "${ReportsBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+
+# Outputs are printed after every deploy so you can quickly find your resources
+Outputs:
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt JobScoutFunction.Arn
+  TableName:
+    Description: DynamoDB table name
+    Value: !Ref JobScoutTable
+  BucketName:
+    Description: S3 reports bucket name
+    Value: !Ref ReportsBucket

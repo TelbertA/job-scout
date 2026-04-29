@@ -1,0 +1,27 @@
+# Never copy these into the image
+
+# Git history — not needed at runtime, adds size
+.git
+.github
+
+# Tests — production image shouldn't contain test code
+tests/
+
+# Python bytecode cache — Docker rebuilds from source
+__pycache__
+*.pyc
+
+# SAM build artifacts — these are intermediate, not source
+.aws-sam/
+
+# Dev tooling — not needed inside the container
+.pre-commit-config.yaml
+.secrets.baseline
+.venv/
+.venv-1/
+
+# Docs
+*.md
+
+# Kubernetes manifests — not relevant to the Lambda image
+k8s/
