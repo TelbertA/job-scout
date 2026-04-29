@@ -1,0 +1,65 @@
+name: CD - Build & Deploy
+
+# Only triggers when code lands on main (i.e. a PR was merged).
+# Never runs on PRs — that's ci.yml's job.
+on:
+  push:
+    branches: [main]
+
+# id-token: write is required for OIDC federation.
+# This is how GitHub Actions proves its identity to AWS without
+# storing any AWS credentials in GitHub Secrets.
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO: job-scout
+
+jobs:
+  deploy:
+    name: Build -> ECR -> SAM Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # OIDC Authentication to AWS - Zero Trust in action.
+      # GitHub generates a short-lived token, AWS validates it against
+      # the OIDC provider we configure in Phase 5. No stored keys anywhere.
+      - name: OIDC Auth to AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-job-scout
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Exchange the OIDC token for temporary ECR credentials.
+      # These expire after 12 hours — short-lived by design.
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Build the image, tag it with the git commit SHA for traceability,
+      # and also tag it as :latest for SAM to reference.
+      # Using the commit SHA means you can always trace a running Lambda
+      # back to the exact commit that built it.
+      - name: Build & Push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPO:latest
+          docker push $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPO:latest
+
+      - uses: aws-actions/setup-sam@v2
+
+      # sam build packages the Lambda function.
+      # sam deploy pushes the CloudFormation changeset to AWS.
+      # --no-confirm-changeset = don't prompt for approval (we already reviewed via PR)
+      # --no-fail-on-empty-changeset = don't error if nothing changed
+      - name: SAM Deploy
+        run: |
+          sam build
+          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset

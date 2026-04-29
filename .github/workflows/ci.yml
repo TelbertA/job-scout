@@ -1,0 +1,94 @@
+name: CI - Security Gates & Tests
+
+# Triggers on every Pull Request targeting main.
+# Nothing merges without clearing every job below.
+on:
+  pull_request:
+    branches: [main]
+
+# Least-privilege permissions for the CI runner.
+# contents: read  = can checkout the code
+# security-events: write = can upload SARIF scan results to GitHub Security tab
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  security:
+    name: Security Scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for TruffleHog to scan all commits
+
+      # Gate 1: Secrets Detection
+      # TruffleHog scans every commit in the PR for leaked credentials.
+      # --only-verified means it only fails on secrets it can confirm are real/active.
+      - name: TruffleHog - Secrets scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+      # Gate 2: Python SAST (Static Application Security Testing)
+      # Bandit analyzes your Python code for common security issues
+      # without running it. -ll = only report medium severity and above.
+      - name: Bandit - Python SAST
+        run: |
+          pip install bandit
+          bandit -r src/ -ll
+
+      # Gate 3: Dependency Scanning (SCA - Software Composition Analysis)
+      # pip-audit checks your pinned dependencies against known CVE databases.
+      # If requests==2.32.3 has a known vulnerability, this catches it.
+      - name: pip-audit - Dependency scan
+        run: |
+          pip install pip-audit
+          pip-audit -r src/requirements.txt --desc
+
+      # Gate 4: IaC Linting
+      # cfn-lint validates template.yaml against AWS CloudFormation rules.
+      # Catches misconfigurations before they ever reach AWS.
+      - name: cfn-lint - IaC validation
+        run: |
+          pip install cfn-lint
+          cfn-lint template.yaml
+
+      # Build the Docker image so Trivy can scan it.
+      # This image is never pushed — it's only used for scanning in CI.
+      - name: Docker build
+        run: docker build -t job-scout:ci .
+
+      # Gate 5: Container Scanning
+      # Trivy scans the image for OS-level and library-level CVEs.
+      # exit-code 1 = fail the pipeline if CRITICAL or HIGH CVEs are found.
+      # ignore-unfixed = don't fail on CVEs that have no fix available yet.
+      - name: Trivy - Container scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "job-scout:ci"
+          format: "table"
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: security  # Tests only run if all security scans pass first
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r src/requirements.txt
+          pip install pytest pytest-cov moto boto3
+
+      # Gate 6: Unit Tests with coverage enforcement
+      # --cov-fail-under=70 means the pipeline fails if less than 70% of
+      # src/ code is covered by tests. Prevents shipping untested code.
+      - name: Run tests
+        run: pytest tests/ -v --cov=src --cov-report=term-missing --cov-fail-under=70
