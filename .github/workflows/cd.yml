@@ -40,7 +40,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       # Build the image, tag it with the git commit SHA for traceability,
-      # and also tag it as :latest for SAM to reference.
+      # and also tag it as :latest for CloudFormation to reference.
       # Using the commit SHA means you can always trace a running Lambda
       # back to the exact commit that built it.
       - name: Build & Push Docker image
@@ -48,18 +48,18 @@ jobs:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG .
+          docker build --platform linux/amd64 --provenance=false -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG .
           docker tag $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPO:latest
           docker push $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPO:latest
 
-      - uses: aws-actions/setup-sam@v2
-
-      # sam build packages the Lambda function.
-      # sam deploy pushes the CloudFormation changeset to AWS.
-      # --no-confirm-changeset = don't prompt for approval (we already reviewed via PR)
-      # --no-fail-on-empty-changeset = don't error if nothing changed
-      - name: SAM Deploy
+      # Deploy infrastructure via CloudFormation (no SAM transform).
+      # update-stack fails if the stack doesn't exist yet, so we use a
+      # create-or-update pattern with a helper script.
+      - name: CloudFormation Deploy
         run: |
-          sam build
-          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
+          aws cloudformation deploy \
+            --stack-name job-scout \
+            --template-file template.yaml \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
