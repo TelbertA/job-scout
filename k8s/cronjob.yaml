@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: job-scout
+  namespace: automation
+spec:
+  schedule: "0 12 * * *"       # 12:00 UTC = 7AM ET daily
+  concurrencyPolicy: Forbid    # Never run two instances simultaneously
+  jobTemplate:
+    spec:
+      backoffLimit: 2           # Retry up to 2 times on failure
+      template:
+        spec:
+          # IRSA (IAM Roles for Service Accounts) — the Kubernetes equivalent
+          # of our Lambda IAM role. The pod assumes an AWS IAM role via the
+          # service account, no credentials stored in the cluster.
+          serviceAccountName: job-scout-sa
+          automountServiceAccountToken: false
+          containers:
+            - name: job-scout
+              image: 217617105289.dkr.ecr.us-east-1.amazonaws.com/job-scout:latest
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "250m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+              env:
+                - name: DYNAMODB_TABLE
+                  value: job-scout-seen
+                - name: S3_BUCKET
+                  value: job-scout-reports-217617105289
+              # Hardened security context — runs as non-root, read-only filesystem,
+              # no privilege escalation, all Linux capabilities dropped.
+              # This is the Kubernetes equivalent of least-privilege IAM.
+              securityContext:
+                runAsNonRoot: true
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+          restartPolicy: OnFailure
