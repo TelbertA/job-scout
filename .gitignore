@@ -13,3 +13,4 @@ bandit-report.json
 .venv/
 .venv-1/
 .coverage
+output.json

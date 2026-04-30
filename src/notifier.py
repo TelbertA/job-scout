@@ -4,7 +4,7 @@ from config import DISCORD_WEBHOOK_URL
 
 logger = logging.getLogger(__name__)
 
-MAX_JOBS_PER_MESSAGE = 10
+MAX_JOBS_PER_MESSAGE = 20
 SCORE_COLOR_MAP = [
     (50, 0x00FF00),   # green  - excellent match
     (30, 0xFFAA00),   # orange - strong match
@@ -40,6 +40,13 @@ def _build_embed(job: dict) -> dict:
         "footer": {"text": f"via {job.get('job_publisher', 'JSearch')}"},
     }
 
+DISCORD_EMBED_LIMIT = 10  # Discord hard limit per payload
+
+def _post_chunk(embeds: list, content: str) -> None:
+    payload = {"content": content, "embeds": embeds}
+    resp = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
+    resp.raise_for_status()
+
 def post_to_discord(jobs: list[dict], date_str: str) -> None:
     if not DISCORD_WEBHOOK_URL:
         logger.warning("DISCORD_WEBHOOK_URL not set — skipping notification")
@@ -49,15 +56,19 @@ def post_to_discord(jobs: list[dict], date_str: str) -> None:
         return
 
     top_jobs = sorted(jobs, key=lambda j: j["score"], reverse=True)[:MAX_JOBS_PER_MESSAGE]
+    embeds = [_build_embed(job) for job in top_jobs]
 
-    payload = {
-        "content": f"**Job Scout Report — {date_str}** | {len(jobs)} qualified jobs found",
-        "embeds": [_build_embed(job) for job in top_jobs],
-    }
-
+    # Split into chunks of 10 (Discord limit) and send each as a separate message
     try:
-        resp = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
-        resp.raise_for_status()
+        for i in range(0, len(embeds), DISCORD_EMBED_LIMIT):
+            chunk = embeds[i:i + DISCORD_EMBED_LIMIT]
+            page = (i // DISCORD_EMBED_LIMIT) + 1
+            total_pages = -(-len(embeds) // DISCORD_EMBED_LIMIT)  # ceiling division
+            content = (
+                f"**Job Scout Report — {date_str}** | {len(jobs)} qualified jobs | Page {page}/{total_pages}"
+                if page == 1 else f"**Job Scout Report — {date_str}** | Page {page}/{total_pages}"
+            )
+            _post_chunk(chunk, content)
         logger.info("Posted %d jobs to Discord", len(top_jobs))
     except requests.exceptions.RequestException as e:
         logger.error("Discord webhook error: %s", e)

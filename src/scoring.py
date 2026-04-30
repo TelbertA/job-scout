@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-DEFAULT_PROFILE = Path(__file__).parent.parent / "profiles" / "default_profile.json"
+DEFAULT_PROFILE = Path(__file__).parent / "profiles" / "default_profile.json"
 
 def load_profile(path: str = None) -> dict:
     profile_path = Path(path) if path else DEFAULT_PROFILE

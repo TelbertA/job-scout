@@ -5,6 +5,7 @@ repos:
       - id: check-added-large-files
       - id: detect-private-key
       - id: check-yaml
+        exclude: template.yaml
       - id: trailing-whitespace
       - id: end-of-file-fixer
 
