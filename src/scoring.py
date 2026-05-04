@@ -1,7 +1,14 @@
 import json
 from pathlib import Path
 
-DEFAULT_PROFILE = Path(__file__).parent / "profiles" / "default_profile.json"
+_here = Path(__file__).parent
+# In Lambda: src/ is flat in /var/task/, so profiles/ is a sibling of scoring.py
+# Locally: scoring.py lives in src/, so profiles/ is one level up
+DEFAULT_PROFILE = (
+    _here / "profiles" / "default_profile.json"
+    if (_here / "profiles").exists()
+    else _here.parent / "profiles" / "default_profile.json"
+)
 
 def load_profile(path: str = None) -> dict:
     profile_path = Path(path) if path else DEFAULT_PROFILE

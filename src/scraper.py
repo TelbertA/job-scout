@@ -13,21 +13,10 @@ HEADERS = {
 
 TARGET_QUERIES = [
     "DevSecOps Engineer",
-    "DevOps Engineer",
     "Cloud Security Engineer",
-    "Cloud Engineer",
+    "DevOps Engineer",
     "Platform Engineer",
     "Security Automation Engineer",
-    "Infrastructure Engineer",
-    "Site Reliability Engineer",
-]
-
-TARGET_LOCATIONS = [
-    "in New York",
-    "in Washington DC",
-    "in Maryland",
-    "in Virginia",
-    "remote",
 ]
 
 def search_jobs(query: str, date_posted: str = "week", page: int = 1) -> list[dict]:
@@ -51,18 +40,16 @@ def search_all_jobs() -> list[dict]:
     seen_ids: set[str] = set()
     all_jobs: list[dict] = []
 
-    for role in TARGET_QUERIES:
-        for location in TARGET_LOCATIONS:
-            query = f"{role} {location}"
-            logger.info("Searching: %s", query)
-            jobs = search_jobs(query)
-            for job in jobs:
-                job_id = job.get("job_id")
-                if job_id and job_id not in seen_ids:
-                    seen_ids.add(job_id)
-                    all_jobs.append(job)
-            # Respect rate limits: 200 req/month free tier
-            time.sleep(0.5)
+    for query in TARGET_QUERIES:
+        logger.info("Searching: %s", query)
+        jobs = search_jobs(query)
+        for job in jobs:
+            job_id = job.get("job_id")
+            if job_id and job_id not in seen_ids:
+                seen_ids.add(job_id)
+                all_jobs.append(job)
+        # Respect rate limits: 200 req/month free tier (5 calls/day = 150/month)
+        time.sleep(0.5)
 
     logger.info("Total unique jobs from API: %d", len(all_jobs))
     return all_jobs
